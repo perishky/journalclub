@@ -1,0 +1,15 @@
+Package: journalclub
+Version: 1.0.0
+Title: Journal club papers
+Description: Uses citations and PubMed queries to generate new publications for a journal club.
+Authors@R: c(person("Matthew", "Suderman", role = c("cre", "aut"),
+                    email = "matthewsuderman@hotmail.com"))
+Author: Matthew Suderman <matthewsuderman@hotmail.com> [cre, aut]
+Maintainer: Matthew Suderman <matthewsuderman@hotmail.com>
+Depends: easyPubMed,
+	 XML,
+	 RCurl
+License: Artistic-2.0
+URL: https://github.com/perishky/journalclub
+LazyData: yes
+RoxygenNote: 6.1.0
