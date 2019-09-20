@@ -12,5 +12,5 @@ document("journalclub")
 
 system("R CMD INSTALL journalclub")
 system("R CMD Rd2pdf journalclub")
-system("mv journalclub.pdf journalclub/docs")
+system("mv journalclub.pdf journalclub/docs/")
 

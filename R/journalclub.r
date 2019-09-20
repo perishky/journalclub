@@ -1,9 +1,17 @@
 load.input <- function(filename) {
     if (!file.exists(filename)) {
-        warning("Creating", filename)
-        return(NULL)
+        warning("Creating ", filename)
+        file.create(filename)
     }
     readLines(filename)
+}
+
+save.output <- function(filename, lines) {
+    stopifnot(file.exists(filename))
+    con <- file(filename, "a")
+    writeLines(as.character(lines), con=con)
+    close(con)
+    return(TRUE)
 }
 
 #' Retrieve new papers for a journal club
@@ -15,32 +23,36 @@ load.input <- function(filename) {
 #' that have not been considered for previous journal clubs
 #' and either match the input query or cite a previously presented paper.
 #' @export
-retrieve.journal.club.candidates <- function(dir, query=NULL, recent=30) {    
+journalclub.candidates <- function(dir, query=NULL, recent=30) {
+    if (!file.exists(dir)) {
+        warning("Creating directory ", dir)
+        dir.create(dir, recursive=T)
+    }
     presented <- load.input(file.path(dir, "presented.txt")) 
     ignore <- load.input(file.path(dir, "ignore.txt"))
     if (is.null(query))
         query <- load.input(file.path(dir, "pubmed-query.txt"))
 
-    if (is.null(query)) {
+    if (length(query) == 0) {
         warning("No query has been submitted")
         query.pmids <- NULL
     }
     else
-        query.pmids <- retrieve.pmids.by.query(query, days=days)
+        query.pmids <- retrieve.pmids.by.query(query, days=recent)
 
-    if (length(pmids) == 0) {
+    if (length(presented) == 0) {
         warning("There are no previously presented papers to check for citations")
         cite.pmids <- NULL
     }
     else
-        cite.pmids <- retrieve.citing.pmids(presented, days=days)
+        cite.pmids <- retrieve.citing.pmids(presented, days=recent)
 
     new.pmids <- setdiff(c(query.pmids, cite.pmids), c(presented, ignore))
-    if (length(new.pmids) > 0)
+    if (length(new.pmids) == 0)
         NULL
     else {
-        writeLines(union(ignore, new.pmids), file.path(dir, "ignore.txt"))
-        retrieve.papers(new.pmids, mc.cores=mc.cores)
+        save.output(file.path(dir, "ignore.txt"), new.pmids)
+        retrieve.papers(new.pmids)
     }
 }
 
@@ -48,12 +60,10 @@ retrieve.journal.club.candidates <- function(dir, query=NULL, recent=30) {
 #'
 #' @param dir Directory where the journal club history is stored.
 #' @param presented List of PMIDs for the papers that were presented.
-#' 
+#' @return TRUE
 #' @export
-update.journal.club.history <- function(dir, presented) {
-    old <- load.input(file.path(dir, "presented.txt")) 
-    presented <- union(old, presented)
-    writeLines(file.path(dir, "presented.txt"))
+journalclub.update <- function(dir, presented) {
+    save.output(file.path(dir, "presented.txt"), presented)
 }
 
 
@@ -73,11 +83,11 @@ retrieve.papers <- function(pmids, retmax=100) {
     
         papers <- articles_to_list(papers)
         papers <- lapply(1:length(papers), function(i) {
-            cat(date(), "retrieving paper", start+i-1, "\n", file=stderr())
+            cat(date(), "retrieving paper", start+i-1, "of", length(pmids), "\n", file=stderr())
             paper <- papers[[i]]
             df <- article_to_df(paper, max_chars=-1, getKeywords=T)
             if (is.null(df)) {
-                warning(paste(pmids[[i]], "could not be accessed"))
+                warning(pmids[[i]], " could not be accessed")
                 return(NULL)
             }
             df$lastname[1] <- paste(df$lastname, collapse=";")
@@ -95,6 +105,7 @@ retrieve.papers <- function(pmids, retmax=100) {
 #' that match the input query
 #' within the few (default: 30) days
 retrieve.pmids.by.query <- function(query,days=30,retmax=1e5) {
+    cat(date(), "Querying PubMed:", query, "\n")
     pubmed.url <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed"
     query <- gsub(" ", "+", as.character(query))
     query <- gsub("\"", "%22", query)
@@ -109,18 +120,17 @@ retrieve.pmids.by.query <- function(query,days=30,retmax=1e5) {
                                sep="="),
                          "usehistory=n"),
                            collapse="&")
-    print(query.url) 
     results <- xmlTreeParse(getURL(query.url))
     results <- xmlRoot(results)
     sapply(1:length(results[["IdList"]]),
-           function(i) xmlValue(results[["IdList"]][[i]]))
+           function(i) as.character(xmlValue(results[["IdList"]][[i]])))
 }
 
 
 #' retrieve pmids for papers that cite
 #' the papers with input pmids within the last
 #' few (default: 30) days
-retrieve.citing.papers <- function(pmids, days=30, retmax=100, verbose=T) {
+retrieve.citing.pmids <- function(pmids, days=30, retmax=100, verbose=T) {
     pubmed.url <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=pubmed&linkname=pubmed_pubmed_citedin"
     
     mindate <- format(Sys.Date()-days, "%Y/%m/%d")
@@ -161,5 +171,5 @@ retrieve.citing.papers <- function(pmids, days=30, retmax=100, verbose=T) {
                 starts[i], "-", ends[i], "\n", file=stdout())
         retrieve.citing.papers.0(pmids[starts[i]:ends[i]])
     })))
-    setdiff(cpmids, pmids)
+    setdiff(as.character(cpmids), as.character(pmids))
 }
