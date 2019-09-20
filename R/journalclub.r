@@ -23,7 +23,9 @@ save.output <- function(filename, lines) {
 #' that have not been considered for previous journal clubs
 #' and either match the input query or cite a previously presented paper.
 #' @export
-journalclub.candidates <- function(dir, query=NULL, recent=30) {
+journalclub.candidates <- function(dir, query=NULL, recent=30, debug=F) {
+    if (debug)
+        browser()
     if (!file.exists(dir)) {
         warning("Creating directory ", dir)
         dir.create(dir, recursive=T)
@@ -51,8 +53,9 @@ journalclub.candidates <- function(dir, query=NULL, recent=30) {
     if (length(new.pmids) == 0)
         NULL
     else {
+        new.papers <- retrieve.papers(new.pmids)
         save.output(file.path(dir, "ignore.txt"), new.pmids)
-        retrieve.papers(new.pmids)
+        new.papers
     }
 }
 
@@ -111,13 +114,14 @@ retrieve.pmids.by.query <- function(query,days=30,retmax=1e5) {
     query <- gsub("\"", "%22", query)
     
     mindate <- format(Sys.Date()-days, "%Y/%m/%d")
+    maxdate <- format(Sys.Date(), "%Y/%m/%d")
+    ## if i don't specify a max date then min date didn't seem to do anything!
     
     query.url <- paste(c(pubmed.url,
                          paste("term", query, sep="="),
                          paste("retmax", format(retmax,scientific=F), sep="="),
-                         paste("mindate",
-                               paste("", mindate, "", sep=""),
-                               sep="="),
+                         paste("mindate", mindate, sep="="),
+                         paste("maxdate", maxdate, sep="="),
                          "usehistory=n"),
                            collapse="&")
     results <- xmlTreeParse(getURL(query.url))
