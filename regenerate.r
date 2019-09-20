@@ -11,8 +11,6 @@ library(roxygen2)
 document("journalclub")
 
 system("R CMD INSTALL journalclub")
-reload(inst("journalclub"))
-
 system("R CMD Rd2pdf journalclub")
 system("mv journalclub.pdf journalclub/docs")
 
