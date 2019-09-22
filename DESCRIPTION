@@ -3,8 +3,9 @@ Version: 1.0.0
 Title: Journal club papers
 Description: Uses citations and PubMed queries to generate new publications for a journal club.
 Authors@R: c(person("Matthew", "Suderman", role = c("cre", "aut"),
-                    email = "matthewsuderman@hotmail.com"))
-Author: Matthew Suderman <matthewsuderman@hotmail.com> [cre, aut]
+                    email = "matthewsuderman@hotmail.com"),
+	     person("Paul", "Yousefi", role = c("cre", "aut"),
+	            email = "paul.yousefi@bristol.ac.uk"))
 Maintainer: Matthew Suderman <matthewsuderman@hotmail.com>
 Depends: easyPubMed,
 	 XML,
