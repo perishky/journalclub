@@ -2,18 +2,18 @@
 % Please edit documentation in R/journalclub.r
 \name{journalclub.update}
 \alias{journalclub.update}
-\title{Update journal club history with newly presented papers}
+\title{Update journal club history with newly presented publications}
 \usage{
 journalclub.update(dir, presented)
 }
 \arguments{
 \item{dir}{Directory where the journal club history is stored.}
 
-\item{presented}{List of PMIDs for the papers that were presented.}
+\item{presented}{List of PMIDs for the publications that were presented.}
 }
 \value{
 TRUE
 }
 \description{
-Update journal club history with newly presented papers
+Update journal club history with newly presented publications
 }

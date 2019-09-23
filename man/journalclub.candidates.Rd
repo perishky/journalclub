@@ -2,22 +2,22 @@
 % Please edit documentation in R/journalclub.r
 \name{journalclub.candidates}
 \alias{journalclub.candidates}
-\title{Retrieve new papers for a journal club}
+\title{Retrieve new publications for a journal club}
 \usage{
-journalclub.candidates(dir, query = NULL, recent = 30)
+journalclub.candidates(dir, query = NULL, recent = 30, debug = F)
 }
 \arguments{
 \item{dir}{Directory where the journal club history is stored.}
 
-\item{query}{PubMed query for identifying new papers (Default: NULL).}
+\item{query}{PubMed query for identifying new publications (Default: NULL).}
 
 \item{recent}{Number of days to look back for publications from the current day (Default: 30).}
 }
 \value{
-A data frame listing recently published papers
+A data frame listing recent publications
 that have not been considered for previous journal clubs
-and either match the input query or cite a previously presented paper.
+and either match the input query or cite a previously presented publication.
 }
 \description{
-Retrieve new papers for a journal club
+Retrieve new publications for a journal club
 }
