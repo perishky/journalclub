@@ -1,18 +1,40 @@
-load.input <- function(filename) {
-    if (!file.exists(filename)) {
-        warning("Creating ", filename)
-        file.create(filename)
+load.input <- function(dir, name) {
+    if ("googlesheet" %in% class(dir)) { ## dir <- gs_title("spreadsheet-name")
+        require(googlesheet)
+        if (name %in% gs_ws_ls(dir))
+            as.data.frame(gs_read(ss=dir, ws=name))[[1]][-1]
+        else {
+            gs_ws_new(ss=dir, ws_title=name, input=data.frame(values=0)) 
+            return(character(0))
+        }   
+    } else {
+        filename <- file.path(dir, paste(name, "txt", sep="."))        
+        if (!file.exists(filename)) {
+            warning("Creating ", filename)
+            file.create(filename)
+        }
+        readLines(filename)
     }
-    readLines(filename)
 }
 
-save.output <- function(filename, lines) {
-    stopifnot(file.exists(filename))
-    con <- file(filename, "a")
-    writeLines(as.character(lines), con=con)
-    close(con)
+save.output <- function(dir, name, lines) {
+    old <- load.input(dir, name)
+    lines <- setdiff(lines, old)
+    
+    if ("googlesheet" %in% class(dir)) {
+        gs_add_row(ss=dir, ws=name, input=data.frame(values=lines))
+    } else {
+        filename <- file.path(dir, paste(name, "txt", sep="."))
+        stopifnot(file.exists(filename))
+        con <- file(filename, "a")
+        writeLines(as.character(lines), con=con)
+        close(con)
+    }
     return(TRUE)
 }
+
+
+
 
 #' Retrieve new publications for a journal club
 #'
@@ -26,15 +48,19 @@ save.output <- function(filename, lines) {
 journalclub.candidates <- function(dir, query=NULL, recent=30, debug=F) {
     if (debug)
         browser()
-    if (!file.exists(dir)) {
-        warning("Creating directory ", dir)
-        dir.create(dir, recursive=T)
-    }
-    presented <- load.input(file.path(dir, "presented.txt")) 
-    ignore <- load.input(file.path(dir, "ignore.txt"))
-    if (is.null(query))
-        query <- load.input(file.path(dir, "pubmed-query.txt"))
 
+    if (class(dir) == "character") {
+        if (!file.exists(dir)) {
+            warning("Creating directory ", dir)
+            dir.create(dir, recursive=T)
+        }
+    }
+
+    presented <- load.input(dir, "presented")
+    ignore <- load.input(dir, "ignore")
+    if (is.null(query))
+        query <- load.input(dir, "pubmed-query")
+        
     if (length(query) == 0) {
         warning("No query has been submitted")
         query.pmids <- NULL
@@ -54,7 +80,7 @@ journalclub.candidates <- function(dir, query=NULL, recent=30, debug=F) {
         NULL
     else {
         new.papers <- journalclub.annotate(new.pmids)
-        save.output(file.path(dir, "ignore.txt"), new.pmids)
+        save.output(dir, "ignore", new.pmids)
         new.papers
     }
 }
@@ -67,7 +93,7 @@ journalclub.candidates <- function(dir, query=NULL, recent=30, debug=F) {
 #' 
 #' @export
 journalclub.update <- function(dir, presented) {
-    save.output(file.path(dir, "presented.txt"), presented)
+    save.output(dir, "presented", presented)
 }
 
 
