@@ -49,7 +49,7 @@ journalclub.candidates <- function(dir, query=NULL, recent=30, debug=F) {
     if (debug)
         browser()
 
-    if (class(dir) == "character") {
+    if ("character" %in% class(dir)) {
         if (!file.exists(dir)) {
             warning("Creating directory ", dir)
             dir.create(dir, recursive=T)
@@ -163,8 +163,11 @@ journalclub.query <- function(query,days=30,retmax=1e5) {
                            collapse="&")
     results <- xmlTreeParse(getURL(query.url))
     results <- xmlRoot(results)
-    sapply(1:length(results[["IdList"]]),
-           function(i) as.character(xmlValue(results[["IdList"]][[i]])))
+    if (length(results[["IdList"]]) > 0)
+        sapply(1:length(results[["IdList"]]),
+               function(i) as.character(xmlValue(results[["IdList"]][[i]])))
+    else
+        character(0)
 }
 
 
