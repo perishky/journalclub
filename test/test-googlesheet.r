@@ -1,4 +1,4 @@
-library(googlesheet)
+library(googlesheets)
 
 gs <- gs_title("epiepi")
 

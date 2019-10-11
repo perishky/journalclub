@@ -1,6 +1,6 @@
 load.input <- function(dir, name) {
     if ("googlesheet" %in% class(dir)) { ## dir <- gs_title("spreadsheet-name")
-        require(googlesheet)
+        require(googlesheets)
         if (name %in% gs_ws_ls(dir))
             as.data.frame(gs_read(ss=dir, ws=name))[[1]][-1]
         else {
