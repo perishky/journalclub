@@ -1,13 +1,15 @@
 library(journalclub)
 
-candidates <- journalclub.candidates("input-test", recent=30)
+recent <- 360*5 ## 5 years
+
+candidates <- journalclub.candidates("input-test", recent=recent)
 
 stopifnot(is.null(candidates))
 
 writeLines("\"DNA methylation\" AND \"BMI\" AND \"smoking\"",
            con="input-test/pubmed-query.txt")
 
-candidates <- journalclub.candidates("input-test", recent=30)
+candidates <- journalclub.candidates("input-test", recent=recent)
 
 presented <- candidates$pmid[1:floor(nrow(candidates)/2)]
 
@@ -20,18 +22,18 @@ stopifnot(identical(sort(union(readLines("input-test/presented.txt"),
                                readLines("input-test/ignore.txt"))),
                     sort(candidates$pmid)))
 
-candidates.rep <- journalclub.candidates("input-test", recent=30)
+candidates.rep <- journalclub.candidates("input-test", recent=recent)
 
 stopifnot(!any(candidates.rep$pmid %in% candidates$pmid))
 
-candidates.rep2 <- journalclub.candidates("input-test", recent=30)
+candidates.rep2 <- journalclub.candidates("input-test", recent=recent)
 
 stopifnot(!any(candidates.rep2$pmid %in% c(candidates.rep2$pmid, candidates$pmid)))
 
 writeLines("\"DNA methylation\" AND \"smoking\" AND \"alcohol\" AND \"gender\"",
            con="input-test/pubmed-query.txt")
 
-candidates.mod <- journalclub.candidates("input-test", recent=30)
+candidates.mod <- journalclub.candidates("input-test", recent=recent)
 
 presented.mod <- candidates.mod$pmid[1:floor(nrow(candidates.mod)/2)]
 

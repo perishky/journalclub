@@ -108,30 +108,71 @@ journalclub.update <- function(dir, presented) {
 #' @export
 journalclub.annotate <- function(pmids, retmax=100) {
     pmids <- na.omit(as.integer(gsub(" ", "", pmids)))
-    
+    pubmed.url <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id="
     papers <- lapply(seq(1,length(pmids),retmax), function(start) {
-        query <- paste0(paste(na.omit(pmids[start:(start+retmax-1)]),
-                              collapse=" "), "[uid]")
-        object <- get_pubmed_ids(query)
-        papers <- fetch_pubmed_data(object, retmax=retmax)
-    
-        papers <- articles_to_list(papers)
-        papers <- mclapply(1:length(papers), function(i) {
-            cat(date(), "retrieving paper", start+i-1, "of", length(pmids), "\n", file=stderr())
-            paper <- papers[[i]]
-            df <- article_to_df(paper, max_chars=-1, getKeywords=T)
-            if (is.null(df)) {
-                warning(pmids[[i]], " could not be accessed")
-                return(NULL)
-            }
-            df$lastname[1] <- paste(df$lastname, collapse=";")
-            df$firstname[1] <- paste(df$firstname, collapse=";")
-            df[1,]
+        ## retrieve information from papers from pubmed
+        query <- paste(na.omit(pmids[start:(start+retmax-1)]),
+                       collapse=",")
+        query.url <- paste0(pubmed.url, query)
+        results <- xmlTreeParse(getURL(query.url))
+        papers <- xmlRoot(results)
+        ## convert xml from pubmed to a data frame
+        papers <- lapply(1:length(papers), function(i) {
+            paper <- tryCatch(papers[[i]], error=function(e) NA)
+            if (!is.list(paper)) return(NULL)
+            ## retrieve column names
+            cols <- sapply(1:length(paper), function(j) {
+                tryCatch({
+                    attrs <- xmlAttrs(paper[[j]])
+                    idx <- which(names(attrs) == "Name")
+                    idx <- idx[1]
+                    attrs[[idx]]
+                }, error=function(e) {
+                    NA
+                })
+            })
+            cols[1] <- "PMID"
+            ## retrieve column types
+            types <- sapply(1:length(paper), function(j) {
+                tryCatch({
+                    attrs <- xmlAttrs(paper[[j]])
+                    idx <- which(names(attrs) == "Type")
+                    idx <- idx[1]
+                    attrs[[idx]]
+                }, error=function(e) {
+                    NA
+                })
+            })
+            ## retrieve column values
+            vals <- sapply(1:length(paper), function(j) {
+                tryCatch({
+                    if (types[j] == "List") {
+                        suppressWarnings(
+                            items <- sapply(1:length(paper[[j]]), function(k)
+                                            xmlValue(paper[[j]][[k]])))
+                        paste(items, collapse=",")
+                    }
+                    else
+                        xmlValue(paper[[j]])
+                }, error=function(e) {
+                    NA
+                })
+            })
+            ## set empty values to missing
+            idx <- which(sapply(vals, length)==0)
+            if (length(idx) > 0)
+                vals[idx] <- NA
+            ## name values
+            names(vals) <- cols
+            unlist(vals)
         })
-        do.call(rbind, papers)
+        papers <- do.call(rbind, papers)
+        as.data.frame(papers, stringsAsFactors=F)
     })
     papers <- do.call(rbind, papers)
-    papers[match(pmids, papers$pmid),]
+    papers$pmid <- pmids
+    colnames(papers) <- tolower(colnames(papers))
+    papers
 }
 
 
