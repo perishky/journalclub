@@ -106,7 +106,7 @@ journalclub.update <- function(dir, presented) {
 #' @return A data frame with one row per publication.
 #' 
 #' @export
-journalclub.annotate <- function(pmids, retmax=100) {
+journalclub.annotate <- function(pmids, retmax=50, abstract=T) {
     pmids <- na.omit(as.integer(gsub(" ", "", pmids)))
     pubmed.url <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id="
     papers <- lapply(seq(1,length(pmids),retmax), function(start) {
@@ -172,6 +172,36 @@ journalclub.annotate <- function(pmids, retmax=100) {
     papers <- do.call(rbind, papers)
     papers$pmid <- pmids
     colnames(papers) <- tolower(colnames(papers))
+
+    if (abstract) {
+        pubmed.url <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&retmode=xml&rettype=abstract&id="        
+        abstracts <- lapply(seq(1,length(pmids),retmax), function(start) {
+            ## retrieve information from papers from pubmed
+            query <- paste(na.omit(pmids[start:(start+retmax-1)]),
+                           collapse=",")
+            query.url <- paste0(pubmed.url, query)
+            results <- xmlTreeParse(getURL(query.url))
+            papers <- xmlRoot(results)
+            pmids <- sapply(1:length(papers), function(i) {
+                tryCatch({
+                    xmlValue(papers[[i]][["MedlineCitation"]][["PMID"]])
+                }, error=function(e) {
+                    0
+                })
+            })
+            abstracts <- lapply(1:length(papers), function(i) {
+                tryCatch({
+                    xmlValue(papers[[i]][["MedlineCitation"]][["Article"]][["Abstract"]])
+                }, error=function(e) {
+                    ""
+                })
+            })
+            names(abstracts) <- pmids
+            abstracts            
+        })
+        abstracts <- unlist(abstracts)
+        papers$abstract <- abstracts[match(papers$pmid, names(abstracts))] 
+    }
     papers
 }
 
