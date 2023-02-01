@@ -41,11 +41,12 @@ save.output <- function(dir, name, lines) {
 #' @param dir Directory where the journal club history is stored.
 #' @param query PubMed query for identifying new publications (Default: NULL).
 #' @param recent Number of days to look back for publications from the current day (Default: 30).
+#' @param retmax Number of publications per batch when requesting citing publications (Default: 20).
 #' @return A data frame listing recent publications
 #' that have not been considered for previous journal clubs
 #' and either match the input query or cite a previously presented publication.
 #' @export
-journalclub.candidates <- function(dir, query=NULL, recent=30, debug=F) {
+journalclub.candidates <- function(dir, query=NULL, recent=30, retmax=20, debug=F) {
     if (debug)
         browser()
 
@@ -73,7 +74,7 @@ journalclub.candidates <- function(dir, query=NULL, recent=30, debug=F) {
         cite.pmids <- NULL
     }
     else
-        cite.pmids <- journalclub.citing(presented, days=recent)
+        cite.pmids <- journalclub.citing(presented, days=recent, retmax=retmax)
 
     new.pmids <- setdiff(c(query.pmids, cite.pmids), c(presented, ignore))
     if (length(new.pmids) == 0)
