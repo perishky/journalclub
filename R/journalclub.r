@@ -291,7 +291,12 @@ journalclub.citing <- function(pmids, days=30, retmax=100, verbose=T) {
         if (verbose)
             cat(date(), "retrieving citations for pmids",
                 starts[i], "-", ends[i], "\n", file=stdout())
-        retrieve.citing.papers.0(pmids[starts[i]:ends[i]])
+        tryCatch({
+            retrieve.citing.papers.0(pmids[starts[i]:ends[i]])
+        }, error=function(e) {
+            print(e)
+            NULL
+        })
     })))
     setdiff(as.character(cpmids), as.character(pmids))
 }
