@@ -80,7 +80,7 @@ journalclub.candidates <- function(dir, query=NULL, recent=30, retmax=20, debug=
     if (length(new.pmids) == 0)
         NULL
     else {
-        new.papers <- journalclub.annotate(new.pmids)
+        new.papers <- journalclub.annotate(new.pmids,retmax=retmax)
         save.output(dir, "ignore", new.pmids)
         new.papers
     }
@@ -109,103 +109,141 @@ journalclub.update <- function(dir, presented) {
 #' @export
 journalclub.annotate <- function(pmids, retmax=50, abstract=T) {
     pmids <- na.omit(as.integer(gsub(" ", "", pmids)))
-    pubmed.url <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id="
     papers <- lapply(seq(1,length(pmids),retmax), function(start) {
-        ## retrieve information from papers from pubmed
-        query <- paste(na.omit(pmids[start:(start+retmax-1)]),
-                       collapse=",")
-        query.url <- paste0(pubmed.url, query)
-        results <- xmlTreeParse(getURL(query.url))
-        papers <- xmlRoot(results)
-        ## convert xml from pubmed to a data frame
-        papers <- lapply(1:length(papers), function(i) {
-            paper <- tryCatch(papers[[i]], error=function(e) NA)
-            if (!is.list(paper)) return(NULL)
-            ## retrieve column names
-            cols <- sapply(1:length(paper), function(j) {
-                tryCatch({
-                    attrs <- xmlAttrs(paper[[j]])
-                    idx <- which(names(attrs) == "Name")
-                    idx <- idx[1]
-                    attrs[[idx]]
-                }, error=function(e) {
-                    NA
-                })
-            })
-            cols[1] <- "PMID"
-            ## retrieve column types
-            types <- sapply(1:length(paper), function(j) {
-                tryCatch({
-                    attrs <- xmlAttrs(paper[[j]])
-                    idx <- which(names(attrs) == "Type")
-                    idx <- idx[1]
-                    attrs[[idx]]
-                }, error=function(e) {
-                    NA
-                })
-            })
-            ## retrieve column values
-            vals <- sapply(1:length(paper), function(j) {
-                tryCatch({
-                    if (types[j] == "List") {
-                        suppressWarnings(
-                            items <- sapply(1:length(paper[[j]]), function(k)
-                                            xmlValue(paper[[j]][[k]])))
-                        paste(items, collapse=",")
-                    }
-                    else
-                        xmlValue(paper[[j]])
-                }, error=function(e) {
-                    NA
-                })
-            })
-            ## set empty values to missing
-            idx <- which(sapply(vals, length)==0)
-            if (length(idx) > 0)
-                vals[idx] <- NA
-            ## name values
-            names(vals) <- cols
-            unlist(vals)
-        })
-        papers <- do.call(rbind, papers)
-        as.data.frame(papers, stringsAsFactors=F)
+        pmids <- na.omit(pmids[start:(start+retmax-1)])
+        annotate.pmids(pmids)
     })
-    papers <- do.call(rbind, papers)
-    papers$pmid <- pmids
+    papers <- do.call(rbind.flex, papers)
     colnames(papers) <- tolower(colnames(papers))
-
+    papers <- as.data.frame(papers, stringsAsFactors=F)
     if (abstract) {
-        pubmed.url <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&retmode=xml&rettype=abstract&id="        
         abstracts <- lapply(seq(1,length(pmids),retmax), function(start) {
-            ## retrieve information from papers from pubmed
-            query <- paste(na.omit(pmids[start:(start+retmax-1)]),
-                           collapse=",")
-            query.url <- paste0(pubmed.url, query)
-            results <- xmlTreeParse(getURL(query.url))
-            papers <- xmlRoot(results)
-            pmids <- sapply(1:length(papers), function(i) {
-                tryCatch({
-                    xmlValue(papers[[i]][["MedlineCitation"]][["PMID"]])
-                }, error=function(e) {
-                    0
-                })
-            })
-            abstracts <- lapply(1:length(papers), function(i) {
-                tryCatch({
-                    xmlValue(papers[[i]][["MedlineCitation"]][["Article"]][["Abstract"]])
-                }, error=function(e) {
-                    ""
-                })
-            })
-            names(abstracts) <- pmids
-            abstracts            
+            pmids <- na.omit(pmids[start:(start+retmax-1)])
+            retrieve.abstracts(pmids)
         })
         abstracts <- unlist(abstracts)
         papers$abstract <- abstracts[match(papers$pmid, names(abstracts))] 
-    }
+    }    
     papers
 }
 
+annotate.pmids <- function(
+    pmids,
+    pubmed.url="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=") {
+
+    query <- paste(pmids,collapse=",")
+    query.url <- paste0(pubmed.url, query)
+    results <- try(xmlTreeParse(getURL(query.url)),silent=T)
+    if ("try-error" %in% class(results)) {
+        if (length(pmids) > 1) {
+            papers <- lapply(pmids, annotate.pmids)
+            papers <- do.call(rbind.flex, papers)
+            as.data.frame(papers, stringsAsFactors=F)
+        }
+        else {
+            warning(paste("PMID", pmids, "could not be annotated."))
+            return(data.frame(PMID=pmids))
+        }
+    } else {
+        papers <- xmlRoot(results)
+        papers <- lapply(1:length(papers), function(i) {
+            paper <- try(papers[[i]], silent=T)
+            if ("try-error" %in% class(paper)) {
+                warning(paste("PMID", pmids[i], "could not be annotated."))
+                return(data.frame(PMID=pmids[i]))
+            }
+            pmidxml2df(paper)
+        })
+        papers <- do.call(rbind.flex, papers)
+        as.data.frame(papers, stringsAsFactors=F)
+    }
+}
+    
+pmidxml2df <- function(paper) {
+    ## retrieve column names
+    cols <- sapply(1:length(paper), function(j) {
+        tryCatch({
+            attrs <- xmlAttrs(paper[[j]])
+            idx <- which(names(attrs) == "Name")
+            idx <- idx[1]
+            attrs[[idx]]
+        }, error=function(e) {
+            NA
+        })
+    })
+    cols[1] <- "PMID"
+    
+    ## retrieve column types
+    types <- sapply(1:length(paper), function(j) {
+        tryCatch({
+            attrs <- xmlAttrs(paper[[j]])
+            idx <- which(names(attrs) == "Type")
+            idx <- idx[1]
+            attrs[[idx]]
+        }, error=function(e) {
+            NA
+        })
+    })
+    
+    ## retrieve column values
+    vals <- sapply(1:length(paper), function(j) {
+        tryCatch({
+            if (types[j] == "List") {
+                suppressWarnings(
+                    items <- sapply(1:length(paper[[j]]), function(k)
+                                    xmlValue(paper[[j]][[k]])))
+                paste(items, collapse=",")
+            }
+            else
+                xmlValue(paper[[j]])
+        }, error=function(e) {
+            NA
+        })
+    })
+    
+    ## set empty values to missing
+    idx <- which(sapply(vals, length)==0)
+    if (length(idx) > 0)
+        vals[idx] <- NA
+    
+    ## name values
+    names(vals) <- cols
+    unlist(vals)
+}
+
+retrieve.abstracts <- function(
+    pmids,
+    pubmed.url="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&retmode=xml&rettype=abstract&id=") {
+    query <- paste(pmids, collapse=",")
+    query.url <- paste0(pubmed.url, query)
+    results <- try(xmlTreeParse(getURL(query.url)), silent=TRUE)
+    if ("try-error" %in% class(results)) {
+        if (length(pmids) > 1) 
+            unlist(lapply(pmids, retrieve.abstracts))
+        else {
+            NULL
+        }
+    }
+    else {
+        papers <- xmlRoot(results)
+        pmids <- sapply(1:length(papers), function(i) {
+            tryCatch({
+                xmlValue(papers[[i]][["MedlineCitation"]][["PMID"]])
+            }, error=function(e) {
+                0
+            })
+        })
+        abstracts <- lapply(1:length(papers), function(i) {
+            tryCatch({
+                xmlValue(papers[[i]][["MedlineCitation"]][["Article"]][["Abstract"]])
+            }, error=function(e) {
+                ""
+            })
+        })
+        names(abstracts) <- pmids
+        abstracts
+    }
+}
 
 #' Query PubMed for recent publications
 #'
@@ -252,38 +290,8 @@ journalclub.query <- function(query,days=30,retmax=1e5) {
 #' @return A vector of PMIDs matching the query.
 #'
 #' @export
-journalclub.citing <- function(pmids, days=30, retmax=100, verbose=T) {
-    pubmed.url <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=pubmed&linkname=pubmed_pubmed_citedin"
-    
-    mindate <- format(Sys.Date()-days, "%Y/%m/%d")
-    
+journalclub.citing <- function(pmids, days=30, retmax=100, verbose=T) {        
     pmids <- na.omit(as.integer(gsub(" ", "", pmids)))
-
-    retrieve.citing.papers.0 <- function(pmids) {
-        query.url <- paste(c(pubmed.url,
-                             paste("id", pmids, sep="="),
-                             paste("retmax",length(pmids),sep="="),
-                             paste("mindate",
-                                   paste("", mindate, "", sep=""),
-                                   sep="="),
-                             "usehistory=y"),
-                           collapse="&")
-    
-        results <- xmlTreeParse(getURL(query.url))
-        
-        results <- xmlRoot(results)
-        
-        citing.pmids <- lapply(1:length(results), function(i) {
-            result <- results[[i]]
-            if ("LinkSetDb" %in% names(result)) {
-                result <- result[["LinkSetDb"]]
-                idx <- which(names(result) == "Link")
-                sapply(idx, function(i) xmlValue(result[[i]][["Id"]]))
-            }
-            else NULL
-        })
-        unname(unlist(citing.pmids))
-    }
 
     starts <- seq(1,length(pmids),retmax)
     ends <- c(tail(starts,-1)-1, length(pmids))
@@ -292,11 +300,41 @@ journalclub.citing <- function(pmids, days=30, retmax=100, verbose=T) {
             cat(date(), "retrieving citations for pmids",
                 starts[i], "-", ends[i], "\n", file=stdout())
         tryCatch({
-            retrieve.citing.papers.0(pmids[starts[i]:ends[i]])
+            retrieve.citing.papers(pmids[starts[i]:ends[i]],days)
         }, error=function(e) {
             print(e)
             NULL
         })
     })))
     setdiff(as.character(cpmids), as.character(pmids))
+}
+
+retrieve.citing.papers <- function(
+    pmids,
+    days,
+    pubmed.url="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=pubmed&linkname=pubmed_pubmed_citedin") {
+    mindate <- format(Sys.Date()-days, "%Y/%m/%d")
+    query.url <- paste(c(pubmed.url,
+                         paste("id", pmids, sep="="),
+                         paste("retmax",length(pmids),sep="="),
+                         paste("mindate",
+                               paste("", mindate, "", sep=""),
+                               sep="="),
+                         "usehistory=y"),
+                       collapse="&")
+    
+    results <- xmlTreeParse(getURL(query.url))
+    
+    results <- xmlRoot(results)
+    
+    citing.pmids <- lapply(1:length(results), function(i) {
+        result <- results[[i]]
+        if ("LinkSetDb" %in% names(result)) {
+            result <- result[["LinkSetDb"]]
+            idx <- which(names(result) == "Link")
+            sapply(idx, function(i) xmlValue(result[[i]][["Id"]]))
+        }
+        else NULL
+    })
+    unname(unlist(citing.pmids))
 }
